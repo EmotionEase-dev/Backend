@@ -175,7 +175,7 @@ function generateAdminEmail(submission) {
                     <td>${submission.name}</td>
                   </tr>
                   <tr>
-                    <th scope="row" style="width: 30%"Age</th>
+                    <th scope="row" style="width: 30%">Age</th>
                     <td>${submission.age}</td>
                   </tr>
                   <tr>
@@ -296,10 +296,12 @@ function generateUserEmail(submission) {
                     <th scope="row">Category</th>
                     <td><span class="badge bg-info">${submission.category}</span></td>
                   </tr>
+
                   <tr>
                     <th scope="row">Age</th>
                     <td><span class="badge bg-info">${submission.age}</span></td>
                   </tr>
+                  
                   <tr>
                     <th scope="row">Date Submitted</th>
                     <td>${new Date(submission.date).toLocaleString()}</td>
