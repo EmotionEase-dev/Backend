@@ -194,9 +194,10 @@ function generateAdminEmail(submission) {
                   </tr>
 
                   <tr>
-                    <th scope="row">Date</th>
-                    <td>${new Date(submission.date).toLocaleString()}</td>
-                  </tr>
+  <th scope="row">Date</th>
+  <td>${new Date(submission.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}  IST</td>
+</tr>
+
                 </tbody>
               </table>
             </div>
