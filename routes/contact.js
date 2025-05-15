@@ -39,7 +39,7 @@ router.post('/submit', contactValidationRules, async (req, res) => {
     });
   }
 
-  const { name, email, phone, category, message } = req.body;
+  const { name, email, phone, category, message,age } = req.body;
   
   const submission = {
     id: Date.now(),
@@ -47,6 +47,7 @@ router.post('/submit', contactValidationRules, async (req, res) => {
     email,
     phone: phone || null,
     category,
+    age,
     message,
     date: new Date().toISOString()
   };
@@ -174,6 +175,10 @@ function generateAdminEmail(submission) {
                     <td>${submission.name}</td>
                   </tr>
                   <tr>
+                    <th scope="row" style="width: 30%"Age</th>
+                    <td>${submission.age}</td>
+                  </tr>
+                  <tr>
                     <th scope="row">Email</th>
                     <td><a href="mailto:${submission.email}">${submission.email}</a></td>
                   </tr>
@@ -187,6 +192,7 @@ function generateAdminEmail(submission) {
                     <th scope="row">Category</th>
                     <td><span class="badge bg-info">${submission.category}</span></td>
                   </tr>
+
                   <tr>
                     <th scope="row">Date</th>
                     <td>${new Date(submission.date).toLocaleString()}</td>
@@ -288,6 +294,10 @@ function generateUserEmail(submission) {
                   <tr>
                     <th scope="row">Category</th>
                     <td><span class="badge bg-info">${submission.category}</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Age</th>
+                    <td><span class="badge bg-info">${submission.age}</span></td>
                   </tr>
                   <tr>
                     <th scope="row">Date Submitted</th>
