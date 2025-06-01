@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import contactRoutes from './routes/contact.js';
 import errorHandler from './middlewares/errorHandler.js';
+import SignUpRouter from './routes/SignUp.js';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -16,6 +17,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/contact', contactRoutes);
+app.use('/api/signup', SignUpRouter);
+
 
 // Error handling middleware
 app.use(errorHandler);
