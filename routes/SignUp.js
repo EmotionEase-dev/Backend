@@ -226,7 +226,7 @@ function generateUserSignupEmail(signup) {
         </ol>
         
         <p><strong>Need immediate help?</strong><br>
-        Call us at +91 1234567890 (9AM-9PM IST)</p>
+        Call us at +91 9345330187 (9AM-9PM IST)</p>
         
         <div class="footer">
           <p>This is an automated message. Please don't reply.</p>
