@@ -173,10 +173,10 @@ function generateAdminSignupEmail(signup) {
           </tr>
         </table>
         
-        <div style="text-align: center; margin-top: 20px;">
-          <a href="mailto:${signup.email}" class="btn btn-primary">Email ${signup.name.split(' ')[0]}</a>
-          <a href="tel:${signup.phone}" class="btn btn-primary">Call ${signup.name.split(' ')[0]}</a>
-        </div>
+        <div class="text-center mt-4">
+  <a href="mailto:${signup.email}" class="btn btn-primary text-white me-2">Email ${signup.name.split(' ')[0]}</a>
+  <a href="tel:${signup.phone}" class="btn btn-primary text-white">Call ${signup.name.split(' ')[0]}</a>
+</div>
         
         <div class="footer">
           <p>&copy; ${new Date().getFullYear()} EmotionEase. All rights reserved.</p>
