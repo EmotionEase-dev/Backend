@@ -118,11 +118,6 @@ SubDomainContactRouter.post('/submit', contactLimiter, contactValidationRules, a
     submissions.set(submissionId, submission);
     console.log('New contact form submission:', { id: submissionId, email });
 
-    // Verify admin email is configured
-    if (!process.env.ADMIN_EMAIL) {
-      throw new Error('Admin email not configured');
-    }
-
     // Generate and send emails in parallel
     const [adminEmail, userEmail] = await Promise.all([
       generateAdminEmail(submission),
@@ -132,8 +127,8 @@ SubDomainContactRouter.post('/submit', contactLimiter, contactValidationRules, a
     const mailOptions = {
       admin: {
         from: `"${process.env.EMAIL_FROM_NAME || 'Company Support'}" <${process.env.EMAIL_USER}>`,
-        to: process.env.ADMIN_EMAIL,
-        subject: process.env.ADMIN_EMAIL_SUBJECT || `New Contact Submission from ${name}`,
+        to: "emotionease@gmail.com",
+        subject:`New Contact Submission from ${name}`,
         html: adminEmail,
         priority: 'high'
       },
