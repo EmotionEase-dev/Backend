@@ -41,7 +41,8 @@ const createTransporter = () => {
     pool: true,
     maxConnections: 5,
     maxMessages: 100,
-    rateLimit: 5, // max messages per second
+    rateDelta: 1000, // 1 second
+    rateLimit: 5, // max messages per rateDelta
     auth: {
       user: EMAIL_USER,
       pass: EMAIL_PASS
@@ -52,7 +53,7 @@ const createTransporter = () => {
     config.service = 'gmail';
   } else {
     config.host = process.env.EMAIL_HOST;
-    config.port = process.env.EMAIL_PORT;
+    config.port = parseInt(process.env.EMAIL_PORT);
     config.secure = process.env.EMAIL_SECURE === 'true';
   }
 
