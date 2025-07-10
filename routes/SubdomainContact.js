@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const router = Router();
+const SubDomainContactRouter = Router();
 const submissions = []; // In-memory storage (consider using a database in production)
 
 // Email configuration with improved error handling
@@ -52,7 +52,7 @@ const contactValidationRules = [
 ];
 
 // Improved submit contact form handler
-router.post('/submit', contactValidationRules, async (req, res) => {
+SubDomainContactRouter.post('/submit', contactValidationRules, async (req, res) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
@@ -208,4 +208,4 @@ function generateUserEmail(submission) {
   `;
 }
 
-export const SubDomainContactRouter = router;
+export default SubDomainContactRouter;
