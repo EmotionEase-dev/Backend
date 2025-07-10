@@ -18,6 +18,8 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/contact', contactRoutes);
 app.use('/api/signup', SignUpRouter);
+app.use('/api/subdomain-contact', SubDomainContactRouter); // Add the new router
+
 
 
 // Error handling middleware
