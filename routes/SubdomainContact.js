@@ -2,45 +2,78 @@ import { Router } from 'express';
 import { body, validationResult } from 'express-validator';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const SubDomainContactRouter = Router();
-const submissions = []; // In-memory storage (consider using a database in production)
 
-// Email configuration with improved error handling
+// Rate limiting to prevent abuse
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+  message: 'Too many contact attempts, please try again later'
+});
+
+// In-memory storage with TTL (time-to-live) for demo purposes
+const submissions = new Map();
+const SUBMISSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Clean up old submissions periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, submission] of submissions) {
+    if (now - new Date(submission.date).getTime() > SUBMISSION_TTL) {
+      submissions.delete(id);
+    }
+  }
+}, 60 * 60 * 1000); // Run hourly
+
+// Email configuration with connection pooling and error handling
 const createTransporter = () => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  const { EMAIL_USER, EMAIL_PASS, EMAIL_SERVICE } = process.env;
+  
+  if (!EMAIL_USER || !EMAIL_PASS) {
     throw new Error('Email credentials not configured');
   }
 
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
+  const config = {
     pool: true,
-    rateLimit: true,
-    maxConnections: 1,
-    maxMessages: 5
-  });
+    maxConnections: 5,
+    maxMessages: 100,
+    rateLimit: 5, // max messages per second
+    auth: {
+      user: EMAIL_USER,
+      pass: EMAIL_PASS
+    }
+  };
+
+  if (EMAIL_SERVICE === 'gmail') {
+    config.service = 'gmail';
+  } else {
+    config.host = process.env.EMAIL_HOST;
+    config.port = process.env.EMAIL_PORT;
+    config.secure = process.env.EMAIL_SECURE === 'true';
+  }
+
+  return nodemailer.createTransport(config);
 };
 
 const transporter = createTransporter();
 
-// Enhanced validation rules
+// Enhanced validation rules with sanitization
 const contactValidationRules = [
   body('name')
-    .notEmpty().withMessage('Name is required')
     .trim()
     .escape()
+    .notEmpty().withMessage('Name is required')
     .isLength({ max: 100 }).withMessage('Name must be less than 100 characters'),
   
   body('email')
+    .trim()
+    .normalizeEmail()
     .notEmpty().withMessage('Email is required')
     .isEmail().withMessage('Email is invalid')
-    .normalizeEmail()
     .isLength({ max: 255 }).withMessage('Email must be less than 255 characters'),
   
   body('phone')
@@ -48,76 +81,86 @@ const contactValidationRules = [
     .trim()
     .escape()
     .isLength({ max: 20 }).withMessage('Phone must be less than 20 characters')
-    .matches(/^[0-9+() -]*$/).withMessage('Phone contains invalid characters')
+    .matches(/^[\d\s+()\-]*$/).withMessage('Phone contains invalid characters')
 ];
 
 // Improved submit contact form handler
-SubDomainContactRouter.post('/submit', contactValidationRules, async (req, res) => {
+SubDomainContactRouter.post('/submit', contactLimiter, contactValidationRules, async (req, res) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
     return res.status(400).json({ 
       success: false, 
-      errors: errors.array({ onlyFirstError: true }) 
+      message: 'Validation failed',
+      errors: errors.array({ onlyFirstError: true }).map(err => ({
+        field: err.path,
+        message: err.msg
+      }))
     });
   }
 
   const { name, email, phone } = req.body;
+  const submissionId = Date.now().toString();
   
   const submission = {
-    id: Date.now().toString(),
+    id: submissionId,
     name,
     email,
     phone: phone || null,
     date: new Date().toISOString(),
-    status: 'pending'
+    status: 'pending',
+    ip: req.ip
   };
 
   try {
     // Save submission
-    submissions.push(submission);
-    console.log('New contact form submission:', submission);
+    submissions.set(submissionId, submission);
+    console.log('New contact form submission:', { id: submissionId, email });
 
-    // Generate email templates
-    const [adminEmailHtml, userEmailHtml] = await Promise.all([
-      generateAdminEmail(submission),
-      generateUserEmail(submission)
-    ]);
-
+    // Verify admin email is configured
     if (!process.env.ADMIN_EMAIL) {
       throw new Error('Admin email not configured');
     }
 
-    // Configure email options
+    // Generate and send emails in parallel
+    const [adminEmail, userEmail] = await Promise.all([
+      generateAdminEmail(submission),
+      generateUserEmail(submission)
+    ]);
+
     const mailOptions = {
       admin: {
-        from: `"Company Support" <${process.env.EMAIL_USER}>`,
+        from: `"${process.env.EMAIL_FROM_NAME || 'Company Support'}" <${process.env.EMAIL_USER}>`,
         to: process.env.ADMIN_EMAIL,
-        subject: `New Contact Submission from ${name}`,
-        html: adminEmailHtml,
+        subject: process.env.ADMIN_EMAIL_SUBJECT || `New Contact Submission from ${name}`,
+        html: adminEmail,
         priority: 'high'
       },
       user: {
-        from: `"Company Support" <${process.env.EMAIL_USER}>`,
+        from: `"${process.env.EMAIL_FROM_NAME || 'Company Support'}" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: 'Thank you for contacting us',
-        html: userEmailHtml
+        subject: process.env.USER_EMAIL_SUBJECT || 'Thank you for contacting us',
+        html: userEmail
       }
     };
 
-    // Send emails in parallel
     await Promise.all([
       transporter.sendMail(mailOptions.admin),
-      transporter.sendMail(mailOptions.user)
+      transporter.sendMail(mailOptions.user).catch(err => {
+        console.error('Failed to send user email:', err);
+        // Don't fail the whole request if user email fails
+      })
     ]);
 
+    // Update submission status
     submission.status = 'completed';
+    submissions.set(submissionId, submission);
     
     return res.status(200).json({
       success: true,
       message: 'Thank you for contacting us! We will get back to you soon.',
       data: {
-        id: submission.id,
+        id: submissionId,
         name: submission.name,
         email: submission.email
       }
@@ -125,26 +168,34 @@ SubDomainContactRouter.post('/submit', contactValidationRules, async (req, res) 
 
   } catch (error) {
     console.error('Submission error:', error);
+    
+    // Update submission status
     submission.status = 'failed';
+    submission.error = error.message;
+    submissions.set(submissionId, submission);
 
-    const statusCode = error.message.includes('credentials') ? 500 : 500;
+    const statusCode = error.message.includes('credentials') ? 503 : 500;
+    const userMessage = error.message.includes('credentials') 
+      ? 'Service temporarily unavailable' 
+      : 'Failed to process your submission. Please try again later.';
     
     return res.status(statusCode).json({
       success: false,
-      message: error.message.includes('credentials') 
-        ? 'Service temporarily unavailable' 
-        : 'Failed to process your submission. Please try again later.',
+      message: userMessage,
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
-// Enhanced email template generators
+// Email template generators with improved security
 function generateAdminEmail(submission) {
+  const safePhone = submission.phone ? submission.phone.replace(/[^\d+]/g, '') : '';
+  
   return `
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="UTF-8">
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -157,11 +208,12 @@ function generateAdminEmail(submission) {
       <div class="container">
         <h2 class="header">New Contact Submission</h2>
         <div class="info">
-          <p><strong>Name:</strong> ${submission.name}</p>
-          <p><strong>Email:</strong> <a href="mailto:${submission.email}">${submission.email}</a></p>
-          ${submission.phone ? `<p><strong>Phone:</strong> <a href="tel:${submission.phone.replace(/[^0-9+]/g, '')}">${submission.phone}</a></p>` : ''}
+          <p><strong>Name:</strong> ${escapeHtml(submission.name)}</p>
+          <p><strong>Email:</strong> <a href="mailto:${escapeHtml(submission.email)}">${escapeHtml(submission.email)}</a></p>
+          ${submission.phone ? `<p><strong>Phone:</strong> <a href="tel:${safePhone}">${escapeHtml(submission.phone)}</a></p>` : ''}
           <p><strong>Date:</strong> ${new Date(submission.date).toLocaleString()}</p>
           <p><strong>Reference ID:</strong> ${submission.id}</p>
+          <p><strong>IP Address:</strong> ${submission.ip}</p>
         </div>
         <p>Please respond to this inquiry within 24 hours.</p>
         <div class="footer">
@@ -178,6 +230,7 @@ function generateUserEmail(submission) {
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="UTF-8">
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -188,7 +241,7 @@ function generateUserEmail(submission) {
     <body>
       <div class="container">
         <h2 class="header">Thank You for Contacting Us</h2>
-        <p>Dear ${submission.name},</p>
+        <p>Dear ${escapeHtml(submission.name)},</p>
         <p>We've received your message and our team will review it shortly. Here's a summary of your submission:</p>
         
         <ul>
@@ -199,13 +252,24 @@ function generateUserEmail(submission) {
         <p>We typically respond within 24 hours. If you have urgent inquiries, please call our support line.</p>
         
         <div class="footer">
-          <p>Best regards,<br>The Company Team</p>
+          <p>Best regards,<br>${escapeHtml(process.env.EMAIL_FROM_NAME || 'The Company Team')}</p>
           <p><small>This is an automated message. Please do not reply directly to this email.</small></p>
         </div>
       </div>
     </body>
     </html>
   `;
+}
+
+// Basic HTML escaping for security
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export default SubDomainContactRouter;
