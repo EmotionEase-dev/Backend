@@ -17,15 +17,17 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Validation rules
+// Updated validation rules with optional fields
 const contactValidationRules = [
   body('name').notEmpty().withMessage('Name is required').trim().escape(),
   body('email')
     .notEmpty().withMessage('Email is required')
     .isEmail().withMessage('Email is invalid')
     .normalizeEmail(),
-  body('category').notEmpty().withMessage('Category is required').trim().escape(),
-  body('message').notEmpty().withMessage('Message is required').trim().escape(),
+  body('category').optional().trim().escape(),
+  body('message').optional().trim().escape(),
+  body('age').optional().isInt({ min: 1, max: 120 }).withMessage('Age must be a valid number between 1-120').toInt(),
+  body('phone').optional().isMobilePhone().withMessage('Invalid phone number').trim().escape()
 ];
 
 // Submit contact form
@@ -39,16 +41,16 @@ router.post('/submit', contactValidationRules, async (req, res) => {
     });
   }
 
-  const { name, email, phone, category, message,age } = req.body;
+  const { name, email, phone, category, message, age } = req.body;
   
   const submission = {
     id: Date.now(),
     name,
     email,
     phone: phone || null,
-    category,
-    age,
-    message,
+    category: category || 'Not specified',
+    age: age || null,
+    message: message || 'No message provided',
     date: new Date().toISOString()
   };
 
@@ -64,8 +66,8 @@ router.post('/submit', contactValidationRules, async (req, res) => {
     // Send email to admin
     const adminMailOptions = {
       from: `"EmotionEase Support" <${process.env.EMAIL_USER}>`,
-      to: 'emotionease@gmail.com',
-      subject: `New Contact Form Submission - ${category}`,
+      to: process.env.ADMIN_EMAIL || 'emotionease@gmail.com',
+      subject: `New Contact Form Submission - ${submission.category}`,
       html: adminEmailHtml
     };
 
@@ -174,10 +176,12 @@ function generateAdminEmail(submission) {
                     <th scope="row" style="width: 30%">Name</th>
                     <td>${submission.name}</td>
                   </tr>
+                  ${submission.age ? `
                   <tr>
-                    <th scope="row" style="width: 30%">Age</th>
+                    <th scope="row">Age</th>
                     <td>${submission.age}</td>
                   </tr>
+                  ` : ''}
                   <tr>
                     <th scope="row">Email</th>
                     <td><a href="mailto:${submission.email}">${submission.email}</a></td>
@@ -192,12 +196,10 @@ function generateAdminEmail(submission) {
                     <th scope="row">Category</th>
                     <td><span class="badge bg-info">${submission.category}</span></td>
                   </tr>
-
                   <tr>
-  <th scope="row">Date</th>
-  <td>${new Date(submission.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}  IST</td>
-</tr>
-
+                    <th scope="row">Date</th>
+                    <td>${new Date(submission.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -296,15 +298,15 @@ function generateUserEmail(submission) {
                     <th scope="row">Category</th>
                     <td><span class="badge bg-info">${submission.category}</span></td>
                   </tr>
-
+                  ${submission.age ? `
                   <tr>
                     <th scope="row">Age</th>
-                    <td><span class="badge bg-info">${submission.age}</span></td>
+                    <td>${submission.age}</td>
                   </tr>
-                  
+                  ` : ''}
                   <tr>
                     <th scope="row">Date Submitted</th>
-                    <td>${new Date(submission.date).toLocaleString()}</td>
+                    <td>${new Date(submission.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</td>
                   </tr>
                 </tbody>
               </table>
